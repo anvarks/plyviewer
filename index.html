@@ -1,10 +1,10 @@
 <!DOCTYPE html>
 <html lang="ru">
 <head>
-  <meta charset="UTF-8" />
+  <meta charset="UTF-8">
   <title>PLY Viewer</title>
   <style>
-    html, body { margin: 0; overflow: hidden; background: #000; }
+    html, body { margin: 0; padding: 0; overflow: hidden; background: #000; }
     canvas { display: block; }
     .ui {
       position: absolute;
@@ -12,81 +12,41 @@
       left: 10px;
       display: flex;
       flex-direction: column;
-      gap: 5px;
-      z-index: 10;
+      gap: 6px;
+      z-index: 100;
     }
-    .ui button {
+    .ui button, .ui input {
       background: rgba(255,255,255,0.1);
       border: none;
-      color: white;
+      color: #fff;
       padding: 6px 10px;
+      font-size: 14px;
       cursor: pointer;
     }
+    .ui input { padding: 4px; }
   </style>
 </head>
 <body>
   <div class="ui">
-    <input type="file" id="fileInput" accept=".ply" />
-    <button onclick="setTopView()">Вид сверху</button>
-    <button onclick="setOrbitView()">Вид извне</button>
-    <button onclick="setFirstPersonView()">Вид от 1-го лица</button>
+    <input type="file" id="fileInput" accept=".ply">
+    <button id="btnTop">Вид сверху</button>
+    <button id="btnOrbit">Вид извне</button>
+    <button id="btnFirst">От 1-го лица</button>
   </div>
 
   <!-- Three.js r149 -->
   <script src="https://cdn.jsdelivr.net/npm/three@0.149.0/build/three.min.js"></script>
-  <!-- // PLYLoader
-  // Fallback: Load PLYLoader via jsDelivr UMD (global THREE.PLYLoader)
-  <script src="https://cdn.jsdelivr.net/npm/three@0.149.0/examples/js/loaders/PLYLoader.js"></script> -->
-  <!-- PLYLoader -->
-  <script src="https://cdn.jsdelivr.net/gh/mrdoob/three.js@r149/examples/js/loaders/PLYLoader.js"></script>
-
-  <!-- Inline OrbitControls -->
-  <script>
-(function() {
-  // Очень упрощенная версия OrbitControls для рендеринга
-  THREE.OrbitControls = function(object, domElement) {
-    const scope = this;
-    this.object = object;
-    this.domElement = domElement;
-    this.enabled = true;
-    this.target = new THREE.Vector3(0,1,0);
-
-    const spherical = new THREE.Spherical();
-    const sphericalDelta = new THREE.Spherical();
-
-    domElement.addEventListener('mousemove', function(event) {
-      if (!scope.enabled || event.buttons !== 1) return;
-      const deltaX = event.movementX || 0;
-      const deltaY = event.movementY || 0;
-      sphericalDelta.theta -= deltaX * 0.005;
-      sphericalDelta.phi   -= deltaY * 0.005;
-    });
-
-    this.update = function() {
-      const offset = new THREE.Vector3();
-      offset.copy(scope.object.position).sub(scope.target);
-      spherical.setFromVector3(offset);
-      spherical.theta += sphericalDelta.theta;
-      spherical.phi   += sphericalDelta.phi;
-      spherical.makeSafe();
-      offset.setFromSpherical(spherical);
-      scope.object.position.copy(scope.target).add(offset);
-      scope.object.lookAt(scope.target);
-      sphericalDelta.set(0,0,0);
-    };
-  };
-})();
-  </script>
+  <!-- OrbitControls and PLYLoader for r149 -->
+  <script src="https://cdn.jsdelivr.net/npm/three@0.149.0/examples/js/controls/OrbitControls.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.149.0/examples/js/loaders/PLYLoader.js"></script>
 
   <script>
     let scene, camera, renderer, controls, mesh;
 
-    init();
-
     function init() {
       scene = new THREE.Scene();
-      camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.01, 100);
-      camera.position.set(2, 2, 2);
+      camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.01, 100);
+      camera.position.set(3, 3, 3);
 
       renderer = new THREE.WebGLRenderer({ antialias: true });
       renderer.setSize(window.innerWidth, window.innerHeight);
@@ -96,8 +56,8 @@
       controls.target.set(0, 1, 0);
       controls.update();
 
-      const light = new THREE.HemisphereLight(0xffffff, 0x444444, 1.2);
-      scene.add(light);
+      const hemi = new THREE.HemisphereLight(0xffffff, 0x444444, 1.2);
+      scene.add(hemi);
 
       animate();
     }
@@ -108,44 +68,46 @@
       renderer.render(scene, camera);
     }
 
-    document.getElementById('fileInput').addEventListener('change', function(e) {
-      const file = e.target.files[0];
-      if (!file) return;
+    function loadPLY(buffer) {
+      const loader = new THREE.PLYLoader();
+      const geometry = loader.parse(buffer);
+      geometry.computeVertexNormals();
+      if (mesh) scene.remove(mesh);
+      const material = new THREE.PointsMaterial({ size: 0.02, vertexColors: geometry.hasAttribute('color') });
+      mesh = new THREE.Points(geometry, material);
+      scene.add(mesh);
+    }
 
-      const reader = new FileReader();
-      reader.onload = function(evt) {
-        const loader = new THREE.PLYLoader();
-        const geometry = loader.parse(evt.target.result);
-        geometry.computeVertexNormals();
-
-        if (mesh) scene.remove(mesh);
-
-        const hasColor = geometry.hasAttribute && geometry.hasAttribute('color');
-        const material = new THREE.PointsMaterial({ size: 0.01, vertexColors: hasColor });
-
-        mesh = new THREE.Points(geometry, material);
-        scene.add(mesh);
-      };
-      reader.readAsArrayBuffer(file);
+    window.addEventListener('DOMContentLoaded', () => {
+      init();
+      document.getElementById('fileInput').addEventListener('change', function(e) {
+        const file = e.target.files[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = function(evt) { loadPLY(evt.target.result); };
+        reader.readAsArrayBuffer(file);
+      });
+      document.getElementById('btnTop').addEventListener('click', () => {
+        camera.position.set(0, 5, 0.01);
+        camera.lookAt(0,0,0);
+        controls.update();
+      });
+      document.getElementById('btnOrbit').addEventListener('click', () => {
+        camera.position.set(3,3,3);
+        camera.lookAt(0,0,0);
+        controls.update();
+      });
+      document.getElementById('btnFirst').addEventListener('click', () => {
+        camera.position.set(0,1.7,0);
+        camera.lookAt(0,1.7,1);
+        controls.update();
+      });
+      window.addEventListener('resize', () => {
+        camera.aspect = window.innerWidth/window.innerHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+      });
     });
-
-    function setTopView() {
-      camera.position.set(0, 5, 0.01);
-      camera.lookAt(0, 0, 0);
-      controls.update();
-    }
-
-    function setOrbitView() {
-      camera.position.set(3, 3, 3);
-      camera.lookAt(0, 0, 0);
-      controls.update();
-    }
-
-    function setFirstPersonView() {
-      camera.position.set(0, 1.7, 0);
-      camera.lookAt(0, 1.7, 1);
-      controls.update();
-    }
   </script>
 </body>
 </html>
