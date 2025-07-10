@@ -32,10 +32,48 @@
     <button onclick="setFirstPersonView()">Вид от 1-го лица</button>
   </div>
 
-  <!-- 💡 Стабильная версия Three.js r149 -->
+  <!-- Three.js r149 -->
   <script src="https://cdn.jsdelivr.net/npm/three@0.149.0/build/three.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/three@0.149.0/examples/js/controls/OrbitControls.js"></script>
+  <!-- PLYLoader -->
   <script src="https://cdn.jsdelivr.net/npm/three@0.149.0/examples/js/loaders/PLYLoader.js"></script>
+
+  <!-- Inline OrbitControls -->
+  <script>
+(function() {
+  // Очень упрощенная версия OrbitControls для рендеринга
+  THREE.OrbitControls = function(object, domElement) {
+    const scope = this;
+    this.object = object;
+    this.domElement = domElement;
+    this.enabled = true;
+    this.target = new THREE.Vector3(0,1,0);
+
+    const spherical = new THREE.Spherical();
+    const sphericalDelta = new THREE.Spherical();
+
+    domElement.addEventListener('mousemove', function(event) {
+      if (!scope.enabled || event.buttons !== 1) return;
+      const deltaX = event.movementX || 0;
+      const deltaY = event.movementY || 0;
+      sphericalDelta.theta -= deltaX * 0.005;
+      sphericalDelta.phi   -= deltaY * 0.005;
+    });
+
+    this.update = function() {
+      const offset = new THREE.Vector3();
+      offset.copy(scope.object.position).sub(scope.target);
+      spherical.setFromVector3(offset);
+      spherical.theta += sphericalDelta.theta;
+      spherical.phi   += sphericalDelta.phi;
+      spherical.makeSafe();
+      offset.setFromSpherical(spherical);
+      scope.object.position.copy(scope.target).add(offset);
+      scope.object.lookAt(scope.target);
+      sphericalDelta.set(0,0,0);
+    };
+  };
+})();
+  </script>
 
   <script>
     let scene, camera, renderer, controls, mesh;
@@ -63,15 +101,16 @@
 
     function animate() {
       requestAnimationFrame(animate);
+      controls.update();
       renderer.render(scene, camera);
     }
 
-    document.getElementById('fileInput').addEventListener('change', function (e) {
+    document.getElementById('fileInput').addEventListener('change', function(e) {
       const file = e.target.files[0];
       if (!file) return;
 
       const reader = new FileReader();
-      reader.onload = function (evt) {
+      reader.onload = function(evt) {
         const loader = new THREE.PLYLoader();
         const geometry = loader.parse(evt.target.result);
         geometry.computeVertexNormals();
